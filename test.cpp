@@ -58,17 +58,48 @@ struct RISCV_Instruction{
    private:
 
     void assign_I_attributes(const string& binary, int f3){
+        if(funct3==0) opName="addi";
+        else if(funct3==7) opName="andi";
+        else if(funct3==6) opName="ori";
+        else if(funct3==4) opName="xori";
+        else if(funct3==2) opName="slti";
+        else if(funct3==3) opName="sltiu";
+        else if(funct3==1) opName="slli";
+        else if(funct3==5 && binary.substr(0,7)=="0000000") opName="srli";
+        else if(funct3==5 && binary.substr(0,7)=="0100000") opName="srai";
+        else if(funct3==0 && stoi(binary.substr(25,7),nullptr,2)==3) opName="lb";
+        else if(funct3==1 && stoi(binary.substr(25,7),nullptr,2)==3) opName="lh";
+        else if(funct3==2 && stoi(binary.substr(25,7),nullptr,2)==3) opName="lw";
+        else if(stoi(binary.substr(25,7),nullptr,2)==103) opName="jalr";
 
     }
 
     void assign_S_attributes(const string& binary, int f3){
 
+        if(funct3==0) opName="sb";
+        else if(funct3==1) opName="sh";
+        else if(funct3==2) opName="sw";
+
     }
     void assign_R_attributes(const string& binary, int f3){
+         if(funct3==0 && funct7==0) opName="add";
+        else if(funct3==0 && funct7==32) opName="sub";
+        else if(funct3==7) opName="and";
+        else if(funct3==6) opName="or";
+        else if(funct3==4) opName="xor";
+        else if(funct3==1) opName="sll";
+        else if(funct3==2) opName="slt";
+        else if(funct3==3) opName="sltu";
+        else if(funct3==5 && funct7==0) opName="srl";
+        else if(funct3==5 && funct7==32) opName="sra";
 
     }
 
     void assign_SB_attributes(const string& binary, int f3){
+        if(funct3==0) opName="beq";
+        else if(funct3==1) opName="bne";
+        else if(funct3==4) opName="blt";
+        else if(funct3==5) opName="bge";
 
     }
 
