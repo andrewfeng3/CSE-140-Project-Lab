@@ -1,5 +1,5 @@
 #include <iostream>
-
+#include <iomanip>
 using namespace std;
 
 struct RISCV_Instruction
@@ -233,11 +233,83 @@ private:
 
     void assign_SB_attributes(const string &binary, int f3)
     {
+        // Operation name
         get_SB_opName(f3);
+
+        this->funct3 = f3;
+
+        // rs1 = bits [19:15]
+        int rs1_decimal = stoi(binary.substr(12, 5), nullptr, 2);
+        this->rs1 = "x" + to_string(rs1_decimal);
+
+        // rs2 = bits [24:20]
+        int rs2_decimal = stoi(binary.substr(7, 5), nullptr, 2);
+        this->rs2 = "x" + to_string(rs2_decimal);
+
+        /*
+            SB Immediate layout:
+
+            imm[12]   = bit 31
+            imm[10:5] = bits 30:25
+            imm[4:1]  = bits 11:8
+            imm[11]   = bit 7
+            imm[0]    = 0 (always)
+
+            Final order:
+            imm[12|11|10:5|4:1|0]
+        */
+
+        string imm_bits =
+            string(1, binary[0]) +           // bit 31
+            string(1, binary[24]) +          // bit 7
+            binary.substr(1, 6) +            // bits 30:25
+            binary.substr(20, 4) +           // bits 11:8
+            "0";                             // LSB = 0
+
+        int32_t imm = stoi(imm_bits, nullptr, 2);
+
+        // Sign extend 13-bit immediate
+        if (imm & (1 << 12))
+            imm |= 0xFFFFE000;
+
+        this->immediate = imm;
     }
 
     void assign_UJ_attributes(const string &binary, int f3)
     {
+        this->opName = "jal";
+
+    // rd = bits [11:7]
+    int rd_decimal = stoi(binary.substr(20, 5), nullptr, 2);
+    this->rd = "x" + to_string(rd_decimal);
+
+    /*
+        UJ Immediate layout:
+
+        imm[20]   = bit 31
+        imm[10:1] = bits 30:21
+        imm[11]   = bit 20
+        imm[19:12]= bits 19:12
+        imm[0]    = 0
+
+        Final order:
+        imm[20|19:12|11|10:1|0]
+    */
+
+    string imm_bits =
+        string(1, binary[0]) +           // bit 31
+        binary.substr(12, 8) +           // bits 19:12
+        string(1, binary[11]) +          // bit 20
+        binary.substr(1, 10) +           // bits 30:21
+        "0";
+
+    int32_t imm = stoi(imm_bits, nullptr, 2);
+
+    // Sign extend 21-bit immediate
+    if (imm & (1 << 20))
+        imm |= 0xFFE00000;
+
+    this->immediate = imm;
     }
 };
 
@@ -246,7 +318,6 @@ ostream &operator<<(ostream &os, const RISCV_Instruction &instr)
     os << "Instruction Type: " << instr.type << endl;
     os << "Operation: " << instr.opName << endl;
 
-    // R-type: has rs1, rs2, rd, funct3, funct7
     if (instr.type == "R")
     {
         os << "Rs1: " << instr.rs1 << endl;
@@ -255,32 +326,36 @@ ostream &operator<<(ostream &os, const RISCV_Instruction &instr)
         os << "Funct3: " << instr.funct3 << endl;
         os << "Funct7: " << instr.funct7 << endl;
     }
-    // I-type: has rs1, rd, immediate
     else if (instr.type == "I")
     {
         os << "Rs1: " << instr.rs1 << endl;
         os << "Rd: " << instr.rd << endl;
-        os << "Immediate: " << instr.immediate << endl;
+        os << "Immediate: " << instr.immediate
+           << " (or 0x" << uppercase << hex << instr.immediate
+           << nouppercase << dec << ")" << endl;
     }
-    // S-type: has rs1, rs2, immediate
     else if (instr.type == "S")
     {
         os << "Rs1: " << instr.rs1 << endl;
         os << "Rs2: " << instr.rs2 << endl;
-        os << "Immediate: " << instr.immediate << endl;
+        os << "Immediate: " << instr.immediate
+           << " (or 0x" << uppercase << hex << instr.immediate
+           << nouppercase << dec << ")" << endl;
     }
-    // SB-type: has rs1, rs2, immediate
     else if (instr.type == "SB")
     {
         os << "Rs1: " << instr.rs1 << endl;
         os << "Rs2: " << instr.rs2 << endl;
-        os << "Immediate: " << instr.immediate << endl;
+        os << "Immediate: " << instr.immediate
+           << " (or 0x" << uppercase << hex << instr.immediate
+           << nouppercase << dec << ")" << endl;
     }
-    // UJ-type: has rd, immediate
     else if (instr.type == "UJ")
     {
         os << "Rd: " << instr.rd << endl;
-        os << "Immediate: " << instr.immediate << endl;
+        os << "Immediate: " << instr.immediate
+           << " (or 0x" << uppercase << hex << instr.immediate
+           << nouppercase << dec << ")" << endl;
     }
 
     return os;
