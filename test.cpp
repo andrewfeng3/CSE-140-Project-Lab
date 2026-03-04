@@ -171,19 +171,69 @@ struct RISCV_Instruction
     }
 
 private:
-    void assign_I_attributes(const string &binary, int f3)
+    void assign_I_attributes(const string &binary, const int f7, const int opcode_decimal, const int f3)
     {
+        get_I_opName(f3, opcode_decimal, f7);
+
+        // get immediate
+        this->immediate = get_sign_extention_I_type(binary);
+
+        // get rs1
+        int rs1_decimal = stoi(binary.substr(12, 5), nullptr, 2);
+        this->rs1 = "x" + to_string(rs1_decimal);
+
+        // get funct3
+        this->funct3 = f3;
+        // get rd
+        int rd_decimal = stoi(binary.substr(20, 5), nullptr, 2);
+        this->rd = "x" + to_string(rd_decimal);
     }
 
-    void assign_S_attributes(const string &binary, int f3)
+    void assign_S_attributes(const string &binary, const int f3)
     {
+        // get operation name
+        this->get_S_opName(f3);
+
+        // funct3
+        this->funct3 = f3;
+
+        // get rs1
+        cout << binary.substr(12, 5) << endl;
+        int rs1_decimal = stoi(binary.substr(12, 5), nullptr, 2);
+        this->rs1 = "x" + to_string(rs1_decimal);
+
+        // get rs2
+        cout << binary.substr(7, 5) << endl;
+        int rs2_decimal = stoi(binary.substr(7, 5), nullptr, 2);
+        this->rs2 = "x" + to_string(rs2_decimal);
+
+        // get immediate field
+        this->immediate = get_sign_extension_S_type(binary);
     }
-    void assign_R_attributes(const string &binary, int f3)
+    void assign_R_attributes(const string &binary, const int f3, const int f7)
     {
+        this->get_R_opName(f7, f3);
+        // rs1
+        int rs1_decimal = stoi(binary.substr(12, 5), nullptr, 2);
+        this->rs1 = "x" + to_string(rs1_decimal);
+
+        // rs2
+        int rs2_decimal = stoi(binary.substr(7, 5), nullptr, 2);
+        this->rs2 = "x" + to_string(rs2_decimal);
+
+        // rd
+        int rd_decimal = stoi(binary.substr(20, 5), nullptr, 2);
+        this->rd = "x" + to_string(rd_decimal);
+
+        // funct3
+        this->funct3 = f3;
+        // funct7
+        this->funct7 = f7;
     }
 
     void assign_SB_attributes(const string &binary, int f3)
     {
+        get_SB_opName(f3);
     }
 
     void assign_UJ_attributes(const string &binary, int f3)
@@ -191,9 +241,62 @@ private:
     }
 };
 
+ostream &operator<<(ostream &os, const RISCV_Instruction &instr)
+{
+    os << "Instruction Type: " << instr.type << endl;
+    os << "Operation: " << instr.opName << endl;
+
+    // R-type: has rs1, rs2, rd, funct3, funct7
+    if (instr.type == "R")
+    {
+        os << "Rs1: " << instr.rs1 << endl;
+        os << "Rs2: " << instr.rs2 << endl;
+        os << "Rd: " << instr.rd << endl;
+        os << "Funct3: " << instr.funct3 << endl;
+        os << "Funct7: " << instr.funct7 << endl;
+    }
+    // I-type: has rs1, rd, immediate
+    else if (instr.type == "I")
+    {
+        os << "Rs1: " << instr.rs1 << endl;
+        os << "Rd: " << instr.rd << endl;
+        os << "Immediate: " << instr.immediate << endl;
+    }
+    // S-type: has rs1, rs2, immediate
+    else if (instr.type == "S")
+    {
+        os << "Rs1: " << instr.rs1 << endl;
+        os << "Rs2: " << instr.rs2 << endl;
+        os << "Immediate: " << instr.immediate << endl;
+    }
+    // SB-type: has rs1, rs2, immediate
+    else if (instr.type == "SB")
+    {
+        os << "Rs1: " << instr.rs1 << endl;
+        os << "Rs2: " << instr.rs2 << endl;
+        os << "Immediate: " << instr.immediate << endl;
+    }
+    // UJ-type: has rd, immediate
+    else if (instr.type == "UJ")
+    {
+        os << "Rd: " << instr.rd << endl;
+        os << "Immediate: " << instr.immediate << endl;
+    }
+
+    return os;
+}
+
 int main(int argc, char *argv[])
 {
-    RISCV_Instruction test = RISCV_Instruction("00000000001100100000001010110011");
+    string binary;
 
+    while (true)
+    {
+        cout << "Enter an instruction: " << endl;
+        cin >> binary;
+        RISCV_Instruction instruction = RISCV_Instruction(binary);
+        cout << instruction << endl;
+        cout << endl;
+    }
     return 0;
 }
