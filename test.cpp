@@ -95,22 +95,59 @@ struct RISCV_Instruction{
 
     }
 
-    void assign_SB_attributes(const string& binary, int f3){
-        if(funct3==0) opName="beq";
-        else if(funct3==1) opName="bne";
-        else if(funct3==4) opName="blt";
-        else if(funct3==5) opName="bge";
+   void assign_SB(const string& binary, int f3){
 
+        funct3 = f3;
+
+        rs2 = "x" + to_string(stoi(binary.substr(7,5), nullptr, 2));
+        rs1 = "x" + to_string(stoi(binary.substr(12,5), nullptr, 2));
+
+        if(f3==0) opName="beq";
+        else if(f3==1) opName="bne";
+        else if(f3==4) opName="blt";
+        else if(f3==5) opName="bge";
+
+        string imm_bits =
+            string(1,binary[0]) +
+            string(1,binary[24]) +
+            binary.substr(1,6) +
+            binary.substr(20,4) +
+            "0";
+
+        immediate = sign_extend(imm_bits);
     }
 
-    void assign_UJ_attributes(const string& binary, int f3){
+    void assign_UJ(const string& binary){
 
+        rd = "x" + to_string(stoi(binary.substr(20,5), nullptr, 2));
+        opName = "jal";
+
+        string imm_bits =
+            string(1,binary[0]) +
+            binary.substr(12,8) +
+            string(1,binary[11]) +
+            binary.substr(1,10) +
+            "0";
+
+        immediate = sign_extend(imm_bits);
+        imm_hex = to_hex(imm_bits);
     }
-
 };
 
-int main(int argc, char* argv[]){
-    RISCV_Instruction test = RISCV_Instruction("00000000001100100000001010110011");   
+int main(){
+
+    string input;
+
+    while(true){
+
+        cout << "Enter an instruction:" << endl;
+
+        if(!(cin >> input))
+            break;
+
+        RISCV_Instruction inst(input);
+        inst.print();
+    }
 
     return 0;
 }
