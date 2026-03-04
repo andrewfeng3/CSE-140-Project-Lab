@@ -317,7 +317,8 @@ ostream &operator<<(ostream &os, const RISCV_Instruction &instr)
 {
     os << "Instruction Type: " << instr.type << endl;
     os << "Operation: " << instr.opName << endl;
-
+    
+    // R-type: has rs1, rs2, rd, funct3, funct7
     if (instr.type == "R")
     {
         os << "Rs1: " << instr.rs1 << endl;
@@ -326,6 +327,7 @@ ostream &operator<<(ostream &os, const RISCV_Instruction &instr)
         os << "Funct3: " << instr.funct3 << endl;
         os << "Funct7: " << instr.funct7 << endl;
     }
+    // I-type: has rs1, rd, immediate
     else if (instr.type == "I")
     {
         os << "Rs1: " << instr.rs1 << endl;
@@ -334,6 +336,7 @@ ostream &operator<<(ostream &os, const RISCV_Instruction &instr)
            << " (or 0x" << uppercase << hex << instr.immediate
            << nouppercase << dec << ")" << endl;
     }
+    // S-type: has rs1, rs2, immediate
     else if (instr.type == "S")
     {
         os << "Rs1: " << instr.rs1 << endl;
@@ -342,6 +345,7 @@ ostream &operator<<(ostream &os, const RISCV_Instruction &instr)
            << " (or 0x" << uppercase << hex << instr.immediate
            << nouppercase << dec << ")" << endl;
     }
+    // SB-type: has rs1, rs2, immediate
     else if (instr.type == "SB")
     {
         os << "Rs1: " << instr.rs1 << endl;
@@ -350,6 +354,7 @@ ostream &operator<<(ostream &os, const RISCV_Instruction &instr)
            << " (or 0x" << uppercase << hex << instr.immediate
            << nouppercase << dec << ")" << endl;
     }
+    // UJ-type: has rd, immediate
     else if (instr.type == "UJ")
     {
         os << "Rd: " << instr.rd << endl;
