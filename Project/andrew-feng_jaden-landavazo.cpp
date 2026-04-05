@@ -3,7 +3,16 @@
 #include <fstream>
 #include <vector>
 #include <cstdint>
+#include <cctype>
 using namespace std;
+
+// Case-insensitive: use part 2 register init when path/filename contains "part2"
+static bool filename_indicates_part2(const string& fn) {
+    string s = fn;
+    for (char& c : s)
+        c = (char)tolower((unsigned char)c);
+    return s.find("part2") != string::npos;
+}
 
 // ============== Global variables (single-cycle CPU) ==============
 int32_t pc = 0;
@@ -666,9 +675,13 @@ void init_part2() {
 int main(int argc, char *argv[])
 {
     string filename;
-    cout << "Enter the program file name to run:" << endl;
-    getline(cin, filename);
-    if (filename.empty()) getline(cin, filename);
+    if (argc >= 2 && argv[1] != nullptr && argv[1][0] != '\0') {
+        filename = argv[1];
+    } else {
+        cout << "Enter the program file name to run:" << endl;
+        getline(cin, filename);
+        if (filename.empty()) getline(cin, filename);
+    }
 
     ifstream f(filename);
     if (!f) { cerr << "Cannot open " << filename << endl; return 1; }
@@ -687,8 +700,8 @@ int main(int argc, char *argv[])
     total_clock_cycles = 0; first_fetch = 1;
     prev_Branch = prev_alu_zero = prev_Jump = prev_Jalr = 0;
 
-    // Use part 2 init if filename contains "part2", else part 1
-    if (filename.find("part2") != string::npos) init_part2();
+    // Use part 2 init if filename contains "part2" (any case), else part 1
+    if (filename_indicates_part2(filename)) init_part2();
     else init_part1();
 
     while (true) {
@@ -710,5 +723,6 @@ int main(int argc, char *argv[])
 
     cout << "program terminated:" << endl;
     cout << "total execution time is " << total_clock_cycles << " cycles" << endl;
+    cout << flush;
     return 0;
 }
