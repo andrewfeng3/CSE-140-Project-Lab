@@ -6,6 +6,7 @@
 #include <cctype>
 using namespace std;
 
+
 // Case-insensitive: use part 2 register init when path/filename contains "part2"
 static bool filename_indicates_part2(const string& fn) {
     string s = fn;
@@ -27,7 +28,8 @@ int total_clock_cycles = 0;
 int RegWrite = 0, MemRead = 0, MemWrite = 0, Branch = 0;
 int MemtoReg = 0, ALUSrc = 0;
 int ALUOp = 0;  // 2-bit: 00, 01, 10 (used by ALU control)
-int Jump = 0, Jalr = 0;  // for JAL / JALR (part 2)
+// DEMO 2+: extra control outputs for JAL (opcode 111) and JALR (opcode 103)
+int Jump = 0, Jalr = 0;
 
 // Values passed between stages
 int32_t alu_result = 0;
@@ -36,7 +38,7 @@ int32_t writeback_rd = 0;      // destination register index
 int32_t writeback_data = 0;    // data to write to rd
 int do_writeback = 0;          // use RegWrite
 int32_t store_data = 0;        // data to store for SW (rs2 value)
-// Previous cycle control (for PC update in next Fetch)
+// DEMO 2+: latched jump/branch outcomes so Fetch can update PC next cycle
 int prev_Branch = 0, prev_alu_zero = 0, prev_Jump = 0, prev_Jalr = 0;
 int first_fetch = 1;
 
@@ -46,7 +48,8 @@ const char* reg_name(int i) {
     return i < 32 ? names[i] : "?";
 }
 
-// Instruction fields
+// Instruction decode (used by Decode() in DEMO 1+). Part 1 opcodes live in
+// get_instruction_type(); DEMO 2 adds UJ (JAL) and I+opcode 103 (JALR).
 struct RISCV_Instruction
 {
     string type, rs1, rs2, rd, opName; 
@@ -90,6 +93,7 @@ struct RISCV_Instruction
             this->type = "R";
             this->assign_R_attributes(binary, funct3, funct7);
         }
+        // Part 1: I-type arith + loads; DEMO 2: opcode 103 = JALR (still I-type)
         else if (opcode_decimal == 19 || opcode_decimal == 3 || opcode_decimal == 103)
         {   // opcodes for I-type instructions (arithmetic, loads, jalr)
             this->type = "I";
@@ -100,6 +104,7 @@ struct RISCV_Instruction
             this->type = "SB";
             this->assign_SB_attributes(binary, funct3);
         }
+        // ----- DEMO 2: dispatch JAL (UJ-type) -----
         else if (opcode_decimal == 111) // jal
         {
             this->type = "UJ";
@@ -169,7 +174,7 @@ struct RISCV_Instruction
         else if (funct3 == 5 && funct7 == 32)
             this->opName = "srai";
 
-        // Jump and link register (check before addi: jalr has funct3=0, opcode 103)
+        // ----- DEMO 2: JALR mnemonic (must come before addi: same funct3=0) -----
         else if (opcode_decimal == 103)
             this->opName = "jalr";
 
@@ -378,9 +383,9 @@ private:
         this->rs2_num = stoi(binary.substr(7, 5), nullptr, 2);
     }
 
+    // ----- DEMO 2: JAL — UJ immediate + rd (PC target computed in Execute) -----
     void assign_UJ_attributes(const string &binary, int f3)
     {
-        // UJ type corresponds to the JAL instruction
         this->opName = "jal";
 
     // Extract destination register (rd)
@@ -482,6 +487,7 @@ ostream &operator<<(ostream &os, const RISCV_Instruction &instr)
     return os;
 }
 
+// ALU control for Part 1 R/I/branch/load-store; JAL/JALR use ALUOp=0 (ADD path).
 // --------------- ALU Control: ALUOp + funct3/funct7 -> 4-bit alu_ctrl ---------------
 // Page 14 Processor-2: 0000 AND, 0001 OR, 0010 ADD, 0110 SUB, ...
 int get_alu_ctrl(int ALUOp, int funct3, int funct7, int opcode) {
@@ -501,7 +507,10 @@ int get_alu_ctrl(int ALUOp, int funct3, int funct7, int opcode) {
     return 0x2;
 }
 
-// --------------- Control Unit: opcode (7-bit) -> 7 control signals ---------------
+// ----- DEMO 2 (primary focus): ControlUnit() -----
+// Drives the single-cycle datapath: Part 1 opcodes 51,19,3,35,99 below; DEMO 2
+// adds 111 (JAL) and 103 (JALR). Called from Decode() every instruction.
+// --------------- Control Unit: opcode (7-bit) -> control signals ---------------
 void ControlUnit(int opcode, int funct3, int funct7) {
     RegWrite = MemRead = MemWrite = Branch = MemtoReg = ALUSrc = 0;
     ALUOp = 0;
@@ -526,27 +535,32 @@ void ControlUnit(int opcode, int funct3, int funct7) {
         MemWrite = 1; ALUSrc = 1; ALUOp = 0;
         return;
     }
-    // branch: 1100011
+    
+    // branch: 1100011 
+    // Part 1: branch BEQ — compare with SUB in ALU, use Branch + alu_zero in Fetch
     if (opcode == 99) {
         Branch = 1; ALUSrc = 0; ALUOp = 1;
         return;
     }
     // JAL: 1101111
+    // ----- DEMO 2: JAL — write return address (next_pc in Writeback); Jump=1 -----
     if (opcode == 111) {
         RegWrite = 1; Jump = 1; ALUOp = 0;
         return;
     }
-    // JALR: 1100111
+    // ----- DEMO 2: JALR — rs1+imm target, LSB cleared in Execute; Jalr=1 -----
     if (opcode == 103) {
         RegWrite = 1; Jalr = 1; ALUSrc = 1; MemtoReg = 0; ALUOp = 0;
         return;
     }
 }
 
-// --------------- Fetch: read instruction at PC, update next_pc; at start use prev branch ---------------
+// ----- DEMO 1: Fetch() -----
+// Select PC (sequential, branch, or jump from *previous* cycle), index program[].
+// DEMO 2+: prev_Jump / prev_Jalr apply branch_target after JAL/JALR.
+// --------------- Fetch: instruction at PC; next_pc; PC update from prior cycle ---------------
 string Fetch(const vector<string>& program) {
     if (!first_fetch) {
-        // Use previous cycle's Branch/Jump to update PC
         if (prev_Jump || prev_Jalr)
             pc = branch_target;
         else
@@ -559,7 +573,9 @@ string Fetch(const vector<string>& program) {
     return program[idx];
 }
 
-// --------------- Decode: decode instruction, read rf, sign-extend, call ControlUnit ---------------
+// ----- DEMO 1: Decode() -----
+// Build RISCV_Instruction, run ControlUnit (detail in DEMO 2), read rf, stage regs.
+// --------------- Decode: decode, read register file, call ControlUnit ---------------
 void Decode(const string& binary, RISCV_Instruction& instr,
             int32_t& rs1_val, int32_t& rs2_val, int32_t& imm_sext) {
     instr = RISCV_Instruction(binary);
@@ -575,7 +591,10 @@ void Decode(const string& binary, RISCV_Instruction& instr,
     do_writeback = RegWrite;
 }
 
-// --------------- Execute: ALU, alu_zero, branch_target ---------------
+// ----- DEMO 1: Execute() -----
+// ALU, alu_zero, branch_target for BEQ. DEMO 2: if Jump, branch_target = PC+UJimm;
+// if Jalr, branch_target = (rs1+imm)&~1.
+// --------------- Execute: ALU, alu_zero, branch / jump targets ---------------
 void Execute(int32_t rs1_val, int32_t rs2_val, int32_t imm_sext,
              const RISCV_Instruction& instr) {
     int opcode = 0;
@@ -598,10 +617,13 @@ void Execute(int32_t rs1_val, int32_t rs2_val, int32_t imm_sext,
     // Branch target: (PC+4) + (imm << 1). Use current PC and next_pc.
     branch_target = next_pc + (instr.immediate << 1);
     // JAL: jump target = PC + (UJ imm << 1). We have next_pc = pc+4, so PC = next_pc-4. JAL imm is already in bytes in many refs; RISC-V JAL imm is in multiples of 2 bytes. So target = pc + (imm<<1) = (next_pc-4) + (imm<<1). Actually JAL immediate is sign-extended 20-bit then << 1, so offset in bytes. So branch_target = pc + instr.immediate. Our assign_UJ stores the immediate already decoded (the full offset). So JAL: branch_target = pc + immediate. We need to set branch_target in Execute for JAL to pc + imm. So set branch_target = pc + instr.immediate for JAL (pc is current instruction address).
+    // DEMO 2: jump targets (return address still comes from next_pc in Writeback)
     if (Jump) branch_target = pc + instr.immediate;
-    if (Jalr) branch_target = (rs1_val + imm_sext) & ~1;  // LSB cleared
+    if (Jalr) branch_target = (rs1_val + imm_sext) & ~1;
 }
 
+// ----- DEMO 1: Mem() -----
+// Word-addressed d_mem[] for LW/SW when MemRead/MemWrite assert.
 // --------------- Mem: load or store ---------------
 void Mem() {
     mem_read_data = 0;
@@ -613,7 +635,10 @@ void Mem() {
     if (MemWrite) d_mem[idx] = store_data;
 }
 
-// --------------- Writeback: update rf, increment cycle ---------------
+// ----- DEMO 1: Writeback() -----
+// Write ALU or load result to rd; bump total_clock_cycles; latch prev_* for Fetch.
+// DEMO 2: for Jump/Jalr, rd gets return address next_pc (not ALU/mem).
+// --------------- Writeback: register write, cycle count, prev_* latches ---------------
 void Writeback() {
     if (do_writeback && writeback_rd > 0) {
         writeback_data = MemtoReg ? mem_read_data : alu_result;
@@ -627,9 +652,10 @@ void Writeback() {
     prev_Jalr = Jalr;
 }
 
-// use_abi_names: 0 = x0,x1,... (part 1), 1 = zero,ra,... (part 2)
+// DEMO 2: ABI names when running a filename containing "part2" (see init_part2)
 int use_abi_names = 0;
 
+// Handout-style trace (used in DEMO 3 run). PC line reflects branch vs Jump/Jalr.
 // --------------- Print changes for this cycle ---------------
 void print_cycle_changes(int prev_rf[32], int prev_d_mem[32], const RISCV_Instruction& instr) {
     cout << "total_clock_cycles " << total_clock_cycles << " :" << endl;
@@ -650,7 +676,8 @@ void print_cycle_changes(int prev_rf[32], int prev_d_mem[32], const RISCV_Instru
     cout << endl;
 }
 
-// --------------- Initialize for Part 1 (10 instructions) ---------------
+// DEMO 2 / final: reset state for handout Part 1 test (x1,x2,x10,x11, d_mem)
+// --------------- Initialize for Part 1 (10-instruction program) ---------------
 void init_part1() {
     for (int i = 0; i < 32; i++) rf[i] = 0;
     for (int i = 0; i < 32; i++) d_mem[i] = 0;
@@ -660,7 +687,7 @@ void init_part1() {
     use_abi_names = 0;
 }
 
-// --------------- Initialize for Part 2 (JAL/JALR) ---------------
+// ----- DEMO 2: init for JAL/JALR trace (ABI regs + use_abi_names) -----
 void init_part2() {
     for (int i = 0; i < 32; i++) rf[i] = 0;
     for (int i = 0; i < 32; i++) d_mem[i] = 0;
@@ -700,10 +727,12 @@ int main(int argc, char *argv[])
     total_clock_cycles = 0; first_fetch = 1;
     prev_Branch = prev_alu_zero = prev_Jump = prev_Jalr = 0;
 
-    // Use part 2 init if filename contains "part2" (any case), else part 1
+    // DEMO 2: part2 in filename selects init_part2() and ABI printing
     if (filename_indicates_part2(filename)) init_part2();
     else init_part1();
 
+    // ----- DEMO 3: final — single-cycle loop for all 12 instructions -----
+    // Order matches textbook datapath: Fetch -> Decode -> Execute -> Mem -> Writeback
     while (true) {
         string binary = Fetch(program);
         if (binary.empty()) break;
