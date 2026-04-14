@@ -105,7 +105,7 @@ struct RISCV_Instruction
             this->assign_SB_attributes(binary, funct3);
         }
         // ----- DEMO 2: dispatch JAL (UJ-type) -----
-        else if (opcode_decimal == 111) // jal
+        else if (opcode_decimal == 111) // JAL
         {
             this->type = "UJ";
             this->assign_UJ_attributes(binary, funct3);
@@ -386,6 +386,7 @@ private:
     // ----- DEMO 2: JAL — UJ immediate + rd (PC target computed in Execute) -----
     void assign_UJ_attributes(const string &binary, int f3)
     {
+        // UJ type corresponds to the JAL instruction
         this->opName = "jal";
 
     // Extract destination register (rd)
