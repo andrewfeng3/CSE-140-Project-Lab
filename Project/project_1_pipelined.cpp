@@ -554,8 +554,7 @@ bool data_hazard_stall(const ID_EX &ex, const EX_MEM &mem, const MEM_WB &wb, con
             return true;
         if (mem.valid && mem.ctrl.RegWrite && mem.rd_num == r)
             return true;
-        if (wb.valid && wb.ctrl.RegWrite && wb.rd_num == r)
-            return true;
+        // No MEM/WB check: WB writes rf earlier in the same cycle before ID reads.
         return false;
     };
     if (insn_uses_rs1(d) && conflicts(d.rs1_num))
@@ -696,6 +695,13 @@ int main(int argc, char *argv[])
             prev_d_mem[i] = d_mem[i];
         }
 
+        // WB first so decode in this cycle sees the newly committed register value.
+        if (wb_snap.valid && wb_snap.ctrl.RegWrite && wb_snap.rd_num > 0)
+        {
+            int32_t wdata = wb_snap.ctrl.MemtoReg ? wb_snap.mem_read_data : wb_snap.alu_result;
+            rf[wb_snap.rd_num] = wdata;
+        }
+
         int32_t ex_alu = 0, ex_bt = 0;
         int ex_az = 0;
         ex_compute(id_snap, ex_alu, ex_az, ex_bt);
@@ -786,17 +792,6 @@ int main(int argc, char *argv[])
                 if_id_next = make_bubble_if_id();
                 pc_next = pc_snap;
             }
-        }
-
-        // ----- WB last in this cycle: ID read rf above must see pre-WB state -----
-        if (wb_snap.valid && wb_snap.ctrl.RegWrite && wb_snap.rd_num > 0)
-        {
-            int32_t wdata;
-            if (wb_snap.ctrl.MemtoReg)
-                wdata = wb_snap.mem_read_data;
-            else
-                wdata = wb_snap.alu_result;
-            rf[wb_snap.rd_num] = wdata;
         }
 
         mem_wb = mem_wb_next;
